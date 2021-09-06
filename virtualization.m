@@ -36,6 +36,17 @@ char *copyCString(NSString *nss)
 }
 @end
 
+@implementation SocketListenerDelegate
+@synthesize listenerID;
+- (BOOL)listener:(VZVirtioSocketListener *)listener 
+shouldAcceptNewConnection:(VZVirtioSocketConnection *)connection 
+fromSocketDevice:(VZVirtioSocketDevice *)socketDevice;
+{
+    int ret = listenerShouldAcceptNewConnectionFromSocketDevice((void *)listener, (void *)connection, (void *)socketDevice, copyCString(self.listenerID));
+    return ret > 0;
+}
+@end
+
 /*!
  @abstract Create a VZLinuxBootLoader with the Linux kernel passed as URL.
  @param kernelPath  Path of Linux kernel on the local file system.
@@ -190,6 +201,13 @@ void setStorageDevicesVZVirtualMachineConfiguration(void *config,
     [(VZVirtualMachineConfiguration *)config setStorageDevices:[(NSMutableArray *)storageDevices copy]];
 }
 
+/*
+void setDirectorySharingDevicesVZVirtualMachineConfiguration(void *config, void *directorySharingDevices)
+{
+    [(VZVirtualMachineConfiguration *)config setDirectorySharingDevices:[(NSMutableArray *)directorySharingDevices copy]];
+}
+*/
+
 /*!
  @abstract Intialize the VZFileHandleSerialPortAttachment from file descriptors.
  @param readFileDescriptor File descriptor for reading from the file.
@@ -229,6 +247,28 @@ void *newVZFileSerialPortAttachment(const char *filePath, bool shouldAppend, voi
     }
     return ret;
 }
+
+/*
+void *newVZVirtioFileSystemDeviceConfiguration(const char *tag)
+{
+    VZVirtioFileSystemDeviceConfiguration *ret;
+    @autoreleasepool {
+        NSString *tagNSString = [NSString stringWithUTF8String:tag];
+        ret = [[VZVirtioFileSystemDeviceConfiguration alloc] initWithTag:tagNSString];
+    }
+    return ret;
+}
+
+char *getVZVirtioFileSystemDeviceConfigurationTag(void *ptr)
+{
+    return copyCString([(VZVirtioFileSystemDeviceConfiguration *)ptr tag]);
+}
+
+void *getVZVirtioFileSystemDeviceConfigurationShare(void *ptr)
+{
+    return [(VZVirtioFileSystemDeviceConfiguration *)ptr share];
+}
+*/
 
 /*!
  @abstract Create a new Virtio Console Serial Port Device configuration
@@ -519,3 +559,92 @@ bool vmCanRequestStop(void *machine, void *queue)
     return (bool)result;
 }
 // --- TODO end
+
+void *newVZMACAddress(const char *macAddress)
+{
+    VZMACAddress *ret;
+    @autoreleasepool {
+        NSString *macAddressNSString = [NSString stringWithUTF8String:macAddress];
+        ret = [[VZMACAddress alloc] initWithString:macAddressNSString];
+    }
+    return ret;
+}
+
+void setNetworkDevicesVZMACAddress(void *config, void *macAddress)
+{
+    [(VZNetworkDeviceConfiguration *)config setMACAddress:[(VZMACAddress *)macAddress copy]];
+}
+
+void *getVZBridgedNetworkInterfaces() {
+    id ret;
+    ret = [VZBridgedNetworkInterface networkInterfaces];
+    NSLog(@"elements %lu\n", [ret count]);
+    return ret;
+}
+
+char *getVZBridgedNetworkInterfaceIdentifier(void *ifPtr) {
+    return copyCString([(VZBridgedNetworkInterface *)ifPtr identifier]);
+}
+
+char *getVZBridgedNetworkInterfaceLocalizedDisplayName(void *ifPtr) {
+    return copyCString([(VZBridgedNetworkInterface *)ifPtr localizedDisplayName]);
+}
+
+void *getVZVirtualMachineSocketDevices(void *ptr)
+{
+    return [(VZVirtualMachine*)ptr socketDevices];
+}
+
+void setSocketListenerForPortVZVirtioSocketDevice(void *ptr, void *listenerPtr, uint32_t port)
+{
+    [(VZVirtioSocketDevice*)ptr setSocketListener:(VZVirtioSocketListener*)listenerPtr forPort:port];
+}
+
+void removeSocketListenerForPortVZVirtioSocketDevice(void *ptr, uint32_t port)
+{
+    [(VZVirtioSocketDevice*)ptr removeSocketListenerForPort:port];
+}
+
+void *newVZVirtioSocketListener(const char *listenerID)
+{
+    VZVirtioSocketListener *ret;
+    @autoreleasepool {
+        NSString *listenerIDStr = [NSString stringWithUTF8String:listenerID];
+        ret = [[VZVirtioSocketListener alloc] init];
+        SocketListenerDelegate *del = [[SocketListenerDelegate alloc] init];
+        [del setListenerID:listenerIDStr];
+        [ret setDelegate:del];
+    }
+    return ret;
+}
+
+uint32_t getVZVirtioSocketConnectionSourcePort(void *ptr)
+{
+    return [(VZVirtioSocketConnection*)ptr sourcePort];
+}
+
+uint32_t getVZVirtioSocketConnectionDestinationPort(void *ptr)
+{
+    return [(VZVirtioSocketConnection*)ptr destinationPort];
+}
+
+int getVZVirtioSocketConnectionFileDescriptor(void *ptr)
+{
+    return [(VZVirtioSocketConnection*)ptr fileDescriptor];
+}
+
+void closeVZVirtioSocketConnection(void *ptr)
+{
+    [(VZVirtioSocketConnection*)ptr close];
+}
+
+typedef void (^connection_handler_t)(VZVirtioSocketConnection *, NSError *);
+
+void connectToPortVZVirtioSocketDevice(void *ptr, uint32_t port, const char *fnID)
+{
+    connection_handler_t ch;
+    ch = Block_copy(^(VZVirtioSocketConnection *connection, NSError *error){
+            connectToPortForSocketDeviceHandler((char*)fnID, (void*)connection, (void*)error);
+        });
+    [(VZVirtioSocketDevice*)ptr connectToPort:port completionHandler:ch];
+}

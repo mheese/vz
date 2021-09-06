@@ -7,7 +7,6 @@ package vz
 */
 import "C"
 import (
-	"os"
 	"runtime"
 )
 
@@ -40,12 +39,12 @@ type FileHandleSerialPortAttachment struct {
 //
 // read parameter is an *os.File for reading from the file.
 // write parameter is an *os.File for writing to the file.
-func NewFileHandleSerialPortAttachment(read, write *os.File) *FileHandleSerialPortAttachment {
+func NewFileHandleSerialPortAttachment(read, write uintptr) *FileHandleSerialPortAttachment {
 	attachment := &FileHandleSerialPortAttachment{
 		pointer: pointer{
 			ptr: C.newVZFileHandleSerialPortAttachment(
-				C.int(read.Fd()),
-				C.int(write.Fd()),
+				C.int(read),
+				C.int(write),
 			),
 		},
 	}

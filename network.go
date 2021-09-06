@@ -9,6 +9,7 @@ import "C"
 import (
 	"os"
 	"runtime"
+	"unsafe"
 )
 
 // BridgedNetwork defines a network interface that bridges a physical interface with a virtual machine.
@@ -21,9 +22,6 @@ import (
 // see: https://developer.apple.com/documentation/virtualization/vzbridgednetworkinterface?language=objc
 type BridgedNetwork interface {
 	NSObject
-
-	// NetworkInterfaces returns the list of network interfaces available for bridging.
-	NetworkInterfaces() []BridgedNetwork
 
 	// Identifier returns the unique identifier for this interface.
 	// The identifier is the BSD name associated with the interface (e.g. "en0").
@@ -159,4 +157,66 @@ func NewVirtioNetworkDeviceConfiguration(attachment NetworkDeviceAttachment) *Vi
 		self.Release()
 	})
 	return config
+}
+
+type VZMACAddress struct {
+	pointer
+}
+
+func NewVZMACAddress(macAddress string) *VZMACAddress {
+	maChars := charWithGoString(macAddress)
+	defer maChars.Free()
+
+	ma := &VZMACAddress{
+		pointer: pointer{
+			ptr: C.newVZMACAddress(maChars.CString()),
+		},
+	}
+	runtime.SetFinalizer(ma, func(self *VZMACAddress) {
+		self.Release()
+	})
+	return ma
+}
+
+func (d *VirtioNetworkDeviceConfiguration) SetMACAddress(macAddress *VZMACAddress) {
+	C.setNetworkDevicesVZMACAddress(d.Ptr(), macAddress.Ptr())
+}
+
+var _ BridgedNetwork = &VZBridgedNetworkInterface{}
+
+type VZBridgedNetworkInterface struct {
+	pointer
+}
+
+func newVZBridgedNetworkInterface(ptr unsafe.Pointer) *VZBridgedNetworkInterface {
+	bi := &VZBridgedNetworkInterface{
+		pointer: pointer{
+			ptr: ptr,
+		},
+	}
+	runtime.SetFinalizer(bi, func(self *VZBridgedNetworkInterface) {
+		self.Release()
+	})
+	return bi
+}
+
+func (i *VZBridgedNetworkInterface) Identifier() string {
+	return C.GoString(C.getVZBridgedNetworkInterfaceIdentifier(i.ptr))
+}
+
+func (i *VZBridgedNetworkInterface) LocalizedDisplayName() string {
+	return C.GoString(C.getVZBridgedNetworkInterfaceLocalizedDisplayName(i.ptr))
+}
+
+func GetVZBridgedNetworkInterfaces() []*VZBridgedNetworkInterface {
+	ifsPtr := pointer{
+		ptr: C.getVZBridgedNetworkInterfaces(),
+	}
+	list := convertNSArrayToSlice(&ifsPtr)
+
+	ret := make([]*VZBridgedNetworkInterface, 0, len(list))
+	for _, item := range list {
+		ret = append(ret, newVZBridgedNetworkInterface(item))
+	}
+	return ret
 }

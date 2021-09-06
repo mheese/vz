@@ -265,3 +265,16 @@ func (v *VirtualMachine) RequestStop() (bool, error) {
 	}
 	return ret, nil
 }
+
+func (v *VirtualMachine) SocketDevices() []*VirtioSocketDevice {
+	ifsPtr := pointer{
+		ptr: C.getVZVirtualMachineSocketDevices(v.Ptr()),
+	}
+	list := convertNSArrayToSlice(&ifsPtr)
+
+	ret := make([]*VirtioSocketDevice, 0, len(list))
+	for _, item := range list {
+		ret = append(ret, newVirtioSocketDevice(item))
+	}
+	return ret
+}

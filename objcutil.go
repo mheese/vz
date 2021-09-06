@@ -75,10 +75,30 @@ static inline void releaseDispatch(void *queue)
 {
 	dispatch_release((dispatch_queue_t)queue);
 }
+
+int getNSArrayLength(void *ptr)
+{
+	return (int)[(NSArray*)ptr count];
+}
+
+void *convertNSArray(void *ptr)
+{
+	NSRange cr = NSMakeRange(0, [(NSArray*)ptr count]);
+	id *arr = malloc(sizeof(id *) * cr.length);
+
+	[(NSArray*)ptr getObjects:arr range:cr];
+	return arr;
+}
+
+void freeConvertedArray(void *ptr)
+{
+	free(ptr);
+}
 */
 import "C"
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"unsafe"
 )
@@ -203,4 +223,21 @@ func convertToNSMutableArray(s []NSObject) *pointer {
 		self.Release()
 	})
 	return p
+}
+
+func getNSArrayLength(o NSObject) int {
+	return int(C.getNSArrayLength(o.Ptr()))
+}
+
+func convertNSArrayToSlice(o NSObject) []unsafe.Pointer {
+	length := int(C.getNSArrayLength(o.Ptr()))
+	arr := C.convertNSArray(o.Ptr())
+	var ret []unsafe.Pointer
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&ret)))
+	sliceHeader.Cap = length
+	sliceHeader.Len = length
+	sliceHeader.Data = uintptr(unsafe.Pointer(arr))
+
+	C.freeConvertedArray(arr)
+	return ret
 }
