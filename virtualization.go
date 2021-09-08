@@ -47,6 +47,27 @@ const (
 	VirtualMachineStateResuming
 )
 
+func (s VirtualMachineState) String() string {
+	switch s {
+	case VirtualMachineStateStopped:
+		return "Stopped"
+	case VirtualMachineStateRunning:
+		return "Running"
+	case VirtualMachineStatePaused:
+		return "Paused"
+	case VirtualMachineStateError:
+		return "Error"
+	case VirtualMachineStateStarting:
+		return "Starting"
+	case VirtualMachineStatePausing:
+		return "Pausing"
+	case VirtualMachineStateResuming:
+		return "Resuming"
+	default:
+		return "Unknown"
+	}
+}
+
 // VirtualMachine represents the entire state of a single virtual machine.
 //
 // A Virtual Machine is the emulation of a complete hardware machine of the same architecture as the real hardware machine.
@@ -267,14 +288,22 @@ func (v *VirtualMachine) RequestStop() (bool, error) {
 }
 
 func (v *VirtualMachine) SocketDevices() []*VirtioSocketDevice {
-	ifsPtr := pointer{
+	ifsPtr := &pointer{
 		ptr: C.getVZVirtualMachineSocketDevices(v.Ptr()),
 	}
-	list := convertNSArrayToSlice(&ifsPtr)
+	list := convertNSArrayToSlice(ifsPtr)
 
 	ret := make([]*VirtioSocketDevice, 0, len(list))
 	for _, item := range list {
-		ret = append(ret, newVirtioSocketDevice(item))
+		ret = append(ret, newVirtioSocketDevice(item, v.dispatchQueue))
 	}
 	return ret
+}
+
+func (v *VirtualMachine) SocketDevice() *VirtioSocketDevice {
+	ptr := C.getVZVirtualMachineSocketDevice(v.Ptr())
+	if ptr == C.NULL {
+		return nil
+	}
+	return newVirtioSocketDevice(ptr, v.dispatchQueue)
 }

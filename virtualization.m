@@ -38,12 +38,29 @@ char *copyCString(NSString *nss)
 
 @implementation SocketListenerDelegate
 @synthesize listenerID;
+@synthesize dispatchQueue;
 - (BOOL)listener:(VZVirtioSocketListener *)listener 
 shouldAcceptNewConnection:(VZVirtioSocketConnection *)connection 
 fromSocketDevice:(VZVirtioSocketDevice *)socketDevice;
 {
-    int ret = listenerShouldAcceptNewConnectionFromSocketDevice((void *)listener, (void *)connection, (void *)socketDevice, copyCString(self.listenerID));
-    return ret > 0;
+    BOOL ret;
+    int tmp = listenerShouldAcceptNewConnectionFromSocketDevice((void *)listener, (void *)connection, (void *)socketDevice, (void *)[self dispatchQueue], copyCString(self.listenerID));
+    if (tmp > 0) {
+        ret = TRUE;
+    } else {
+        ret = FALSE;
+    }
+    return ret;
+}
+- (BOOL)respondsToSelector:(SEL)aSelector;
+{
+    NSLog(@"responds to selector %@", NSStringFromSelector(aSelector));
+    return TRUE;
+}
++ (BOOL)instancesRespondToSelector:(SEL)aSelector;
+{
+    NSLog(@"instances responds to selector %@", NSStringFromSelector(aSelector));
+    return TRUE;
 }
 @end
 
@@ -578,7 +595,6 @@ void setNetworkDevicesVZMACAddress(void *config, void *macAddress)
 void *getVZBridgedNetworkInterfaces() {
     id ret;
     ret = [VZBridgedNetworkInterface networkInterfaces];
-    NSLog(@"elements %lu\n", [ret count]);
     return ret;
 }
 
@@ -595,14 +611,32 @@ void *getVZVirtualMachineSocketDevices(void *ptr)
     return [(VZVirtualMachine*)ptr socketDevices];
 }
 
-void setSocketListenerForPortVZVirtioSocketDevice(void *ptr, void *listenerPtr, uint32_t port)
+void *getVZVirtualMachineSocketDevice(void *ptr)
 {
-    [(VZVirtioSocketDevice*)ptr setSocketListener:(VZVirtioSocketListener*)listenerPtr forPort:port];
+     id arr = [(VZVirtualMachine*)ptr socketDevices];
+     if ([arr count] == 1) {
+         return [arr objectAtIndex:0];
+     }
+     return NULL;
 }
 
-void removeSocketListenerForPortVZVirtioSocketDevice(void *ptr, uint32_t port)
+void setSocketListenerForPortVZVirtioSocketDevice(void *ptr, void *queue, void *listenerPtr, uint32_t port)
 {
-    [(VZVirtioSocketDevice*)ptr removeSocketListenerForPort:port];
+    //[(VZVirtioSocketDevice*)ptr setSocketListener:(VZVirtioSocketListener*)listenerPtr forPort:port];
+    dispatch_sync((dispatch_queue_t)queue, ^{
+        id obj = ptr;
+        VZVirtioSocketListener *lobj = (VZVirtioSocketListener*)listenerPtr;
+        id del = (SocketListenerDelegate*)[lobj delegate];
+        [del setDispatchQueue:(dispatch_queue_t)queue];
+        [obj setSocketListener:lobj forPort:port];
+    });
+}
+
+void removeSocketListenerForPortVZVirtioSocketDevice(void *ptr, void *queue, uint32_t port)
+{
+    dispatch_sync((dispatch_queue_t)queue, ^{
+        [(VZVirtioSocketDevice*)ptr removeSocketListenerForPort:port];
+    });
 }
 
 void *newVZVirtioSocketListener(const char *listenerID)
@@ -635,16 +669,22 @@ int getVZVirtioSocketConnectionFileDescriptor(void *ptr)
 
 void closeVZVirtioSocketConnection(void *ptr)
 {
-    [(VZVirtioSocketConnection*)ptr close];
+    if (ptr != NULL) {
+        //dispatch_sync((dispatch_queue_t)queue, ^{
+            [(VZVirtioSocketConnection*)ptr close];
+        //});
+    }
 }
 
 typedef void (^connection_handler_t)(VZVirtioSocketConnection *, NSError *);
 
-void connectToPortVZVirtioSocketDevice(void *ptr, uint32_t port, const char *fnID)
+void connectToPortVZVirtioSocketDevice(void *ptr, void *queue, uint32_t port, const char *fnID)
 {
     connection_handler_t ch;
     ch = Block_copy(^(VZVirtioSocketConnection *connection, NSError *error){
-            connectToPortForSocketDeviceHandler((char*)fnID, (void*)connection, (void*)error);
-        });
-    [(VZVirtioSocketDevice*)ptr connectToPort:port completionHandler:ch];
+        connectToPortForSocketDeviceHandler((char*)fnID, (void*)connection, (void*)error);
+    });
+    dispatch_sync((dispatch_queue_t)queue, ^{
+        [(VZVirtioSocketDevice*)ptr connectToPort:port completionHandler:ch];
+    });
 }

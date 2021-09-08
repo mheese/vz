@@ -14,7 +14,7 @@ void startHandler(void *err, char *id);
 void pauseHandler(void *err, char *id);
 void resumeHandler(void *err, char *id);
 void changeStateOnObserver(int state, char *id);
-int listenerShouldAcceptNewConnectionFromSocketDevice(void *listener, void *conn, void *device, char *listenerID);
+int listenerShouldAcceptNewConnectionFromSocketDevice(void *listener, void *conn, void *device, void *dispatchQueue, char *listenerID);
 void connectToPortForSocketDeviceHandler(char *fnID, void *connection, void *error);
 
 @interface Observer : NSObject
@@ -22,6 +22,7 @@ void connectToPortForSocketDeviceHandler(char *fnID, void *connection, void *err
 @end
 
 @interface SocketListenerDelegate : NSObject <VZVirtioSocketListenerDelegate>
+@property(assign, readwrite) dispatch_queue_t dispatchQueue;
 @property(copy, readwrite) NSString *listenerID;
 - (BOOL)listener:(VZVirtioSocketListener *)listener 
 shouldAcceptNewConnection:(VZVirtioSocketConnection *)connection 
@@ -90,11 +91,12 @@ char *getVZVirtioFileSystemDeviceConfigurationTag(void *ptr);
 void *getVZVirtioFileSystemDeviceConfigurationShare(void *ptr);
 
 void *getVZVirtualMachineSocketDevices(void *ptr);
-void setSocketListenerForPortVZVirtioSocketDevice(void *ptr, void *listenerPtr, uint32_t port);
-void removeSocketListenerForPortVZVirtioSocketDevice(void *ptr, uint32_t port);
+void *getVZVirtualMachineSocketDevice(void *ptr);
+void setSocketListenerForPortVZVirtioSocketDevice(void *ptr, void *queue, void *listenerPtr, uint32_t port);
+void removeSocketListenerForPortVZVirtioSocketDevice(void *ptr, void *queue, uint32_t port);
 void *newVZVirtioSocketListener(const char *listenerID);
 uint32_t getVZVirtioSocketConnectionSourcePort(void *ptr);
 uint32_t getVZVirtioSocketConnectionDestinationPort(void *ptr);
 int getVZVirtioSocketConnectionFileDescriptor(void *ptr);
 void closeVZVirtioSocketConnection(void *ptr);
-void connectToPortVZVirtioSocketDevice(void *ptr, uint32_t port, const char *fnID);
+void connectToPortVZVirtioSocketDevice(void *ptr, void *queue, uint32_t port, const char *fnID);

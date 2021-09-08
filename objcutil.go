@@ -94,11 +94,17 @@ void freeConvertedArray(void *ptr)
 {
 	free(ptr);
 }
+
+const void* getNSArrayItem(void *ptr, int i)
+{
+	NSArray *arr = (NSArray *)ptr;
+	if (arr == NULL) { return NULL; }
+  return [arr objectAtIndex:i];
+}
 */
 import "C"
 import (
 	"fmt"
-	"reflect"
 	"runtime"
 	"unsafe"
 )
@@ -230,14 +236,20 @@ func getNSArrayLength(o NSObject) int {
 }
 
 func convertNSArrayToSlice(o NSObject) []unsafe.Pointer {
-	length := int(C.getNSArrayLength(o.Ptr()))
-	arr := C.convertNSArray(o.Ptr())
-	var ret []unsafe.Pointer
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&ret)))
-	sliceHeader.Cap = length
-	sliceHeader.Len = length
-	sliceHeader.Data = uintptr(unsafe.Pointer(arr))
+	// length := int(C.getNSArrayLength(o.Ptr()))
+	// arr := C.convertNSArray(o.Ptr())
+	// var ret []unsafe.Pointer
+	// sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&ret)))
+	// sliceHeader.Cap = length
+	// sliceHeader.Len = length
+	// sliceHeader.Data = uintptr(unsafe.Pointer(arr))
 
-	C.freeConvertedArray(arr)
+	// C.freeConvertedArray(arr)
+	// return ret
+	length := int(C.getNSArrayLength(o.Ptr()))
+	ret := make([]unsafe.Pointer, 0, length)
+	for i := 0; i < length; i++ {
+		ret = append(ret, C.getNSArrayItem(o.Ptr(), C.int(i)))
+	}
 	return ret
 }

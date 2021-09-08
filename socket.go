@@ -52,13 +52,15 @@ func NewVirtioSocketDeviceConfiguration() *VirtioSocketDeviceConfiguration {
 
 type VirtioSocketDevice struct {
 	pointer
+	dispatchQueue unsafe.Pointer
 }
 
-func newVirtioSocketDevice(ptr unsafe.Pointer) *VirtioSocketDevice {
+func newVirtioSocketDevice(ptr, dispatchQueue unsafe.Pointer) *VirtioSocketDevice {
 	d := &VirtioSocketDevice{
 		pointer: pointer{
 			ptr: ptr,
 		},
+		dispatchQueue: dispatchQueue,
 	}
 	runtime.SetFinalizer(d, func(self *VirtioSocketDevice) {
 		self.Release()
@@ -91,7 +93,7 @@ func NewVirtioSocketListener(f ShouldAcceptNewConnectionFunc) *VirtioSocketListe
 }
 
 //export listenerShouldAcceptNewConnectionFromSocketDevice
-func listenerShouldAcceptNewConnectionFromSocketDevice(listener, conn, device unsafe.Pointer, listenerID *C.char) C.int {
+func listenerShouldAcceptNewConnectionFromSocketDevice(listener, conn, device, dispatchQueue unsafe.Pointer, listenerID *C.char) C.int {
 	lID := (*char)(listenerID)
 	f := listeners[lID.String()]
 	if f == nil {
@@ -106,7 +108,7 @@ func listenerShouldAcceptNewConnectionFromSocketDevice(listener, conn, device un
 		self.Release()
 	})
 	c := newVirtioSocketConnection(conn)
-	d := newVirtioSocketDevice(device)
+	d := newVirtioSocketDevice(device, dispatchQueue)
 	if f(l, c, d) {
 		return C.int(1)
 	}
@@ -114,11 +116,11 @@ func listenerShouldAcceptNewConnectionFromSocketDevice(listener, conn, device un
 }
 
 func (d *VirtioSocketDevice) SetSocketListenerForPort(l *VirtioSocketListener, port uint32) {
-	C.setSocketListenerForPortVZVirtioSocketDevice(d.Ptr(), l.Ptr(), C.uint32_t(port))
+	C.setSocketListenerForPortVZVirtioSocketDevice(d.Ptr(), d.dispatchQueue, l.Ptr(), C.uint32_t(port))
 }
 
 func (d *VirtioSocketDevice) RemoveSocketListenerForPort(port uint32) {
-	C.removeSocketListenerForPortVZVirtioSocketDevice(d.Ptr(), C.uint32_t(port))
+	C.removeSocketListenerForPortVZVirtioSocketDevice(d.Ptr(), d.dispatchQueue, C.uint32_t(port))
 }
 
 type ConnectionAttemptFunc func(conn *VirtioSocketConnection, err error)
@@ -143,7 +145,7 @@ func (d *VirtioSocketDevice) ConnectToPort(port uint32, completionHandler Connec
 	cs := charWithGoString(id)
 	connections[id] = completionHandler
 	defer cs.Free()
-	C.connectToPortVZVirtioSocketDevice(d.Ptr(), C.uint32_t(port), cs.CString())
+	C.connectToPortVZVirtioSocketDevice(d.Ptr(), d.dispatchQueue, C.uint32_t(port), cs.CString())
 }
 
 type VirtioSocketConnection struct {
